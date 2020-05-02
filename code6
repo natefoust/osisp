@@ -1,0 +1,104 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <mqueue.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#define MQNAME "/m"
+#define MQMESG "Hello, my darling!"
+
+void function()
+{
+
+    
+}
+
+int main (void) 
+{
+    char f[254];
+    int reads;
+    if((reads = read(0, f, sizeof(f)) < 0))
+    {
+        printf("ERROR");
+    }
+
+    struct mq_attr mqAttr;
+    int rc;
+    char buffer[2048];
+    
+    printf("Send some mesage.\n");
+ 
+ //Устанавливаем аттрибуты очереди
+    mqAttr.mq_maxmsg = 10;
+    mqAttr.mq_msgsize = 1024;
+ 
+ //Открываем очередь
+    mqd_t sndHndl;
+    sndHndl = mq_open (MQNAME, O_RDWR|O_CREAT, S_IWUSR|S_IRUSR, &mqAttr);
+    if (sndHndl < 0) 
+    {
+        printf ("\t\tError %d (%s) mq_open for send.\n",
+        errno, strerror (errno));
+        exit (-1);
+    }
+    printf ("\tOpened mqd_t of %d.\n", sndHndl);
+
+ //посылаем сообщение в очередь
+    rc = mq_send (sndHndl, f, sizeof (MQMESG), 1);
+    if (rc < 0) 
+    {
+        printf ("\t\tError %d (%s) mq_send.\n",
+        errno, strerror (errno));
+        exit (-1);
+    }
+    printf ("\tSend mqd_t of %d.\n", sndHndl);
+    printf("Receive some mesage.\n");
+
+    function();
+    
+    int pid_st;
+    char f1[2048];
+    if((pid_st = fork()) == -1)
+    {
+        printf("ERROR: fork returns -1");
+    }
+    else if (pid_st == 0)
+    {
+        mqd_t rcHndl;
+        //открываем очередь
+        rcHndl = mq_open(MQNAME, O_RDWR);
+        if (rcHndl < 0)
+        {
+            printf ("\t\tError %d (%s) mq_open for receive.\n",
+            errno, strerror (errno));
+            exit (-1);
+        }
+        printf ("\tOpened mqd_t of %d.\n", rcHndl);
+        printf ("\tReceiving mqd_t %d.\n", rcHndl);
+        printf("im here!");
+ 
+         //принимаем сообщение из очереди
+        int rc;
+        rc = mq_receive (rcHndl, f1, sizeof (f1), NULL);
+        if (rc < 0) 
+        {
+            printf ("\t\tError %d (%s) mq_receive.\n",
+            errno, strerror (errno));
+            exit (-1);
+        }
+
+        printf ("\tReceived: %s\n", f1);
+    }
+    
+
+ //удаляем очередь
+    if (mq_unlink (MQNAME) < 0) 
+    {
+        printf ("Warning %d (%s) mq_unlink.\n",
+        errno, strerror (errno));
+    }
+    return 0;
+}
