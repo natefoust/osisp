@@ -1,0 +1,103 @@
+#include <unistd.h>
+#include <sys/types.h>
+#include <semaphore.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#define sem1 "sem1"
+#define sem2 "sem2"
+
+/**************************************************************/
+
+/*****ПРИНУДИТЕЛЬНО НЕ ЗАВЕРШАТЬ ДО ЗАВЕРШЕНИЯ ПРОГРАММЫ 1*****/
+
+/**************************************************************/
+
+int main()
+{   
+    // Cоздаём 2 семафора, первый сразу включаем для начальной записи
+    sem_t *s1 = sem_open(sem1, O_CREAT, 0777, 1);
+    sem_t *s2 = sem_open(sem2, O_CREAT, 0777, 0);
+    
+    // Открываем файл, в него будут обращать оба канала и брать данные
+    int file_descr = open("file", O_RDWR | O_CREAT);
+    if(file_descr < 0)
+    {
+        printf("Не удалось открыть файл.");
+        exit(0);
+    }
+    
+    // Т.к. числа Фибоначчи, нам нужно 2 стартовых значения, первое будет сразу в файле
+    // Чтобы файл при каждом запуске был готов к работе сразу, всегда пихаем туда еденицу
+    int one = 1;
+    int write_status;
+
+    write_status = write(file_descr, &one, sizeof(int));
+    if(write_status < 0)
+    {
+        printf("Не удалось сделать запись в файл.");
+        exit(0);
+    }
+    close(file_descr);
+
+    //int n;
+    //printf("До какого числа необходимо дойти: ");   // имеется в виду порядковый номер в последовательности
+    //scanf("%d", &n);
+
+    int read_status;
+    int current; int result; int prev = 0;
+    for (int i = 0; i < 5; i++)  // 3 числа у нас и так есть
+    {
+        sem_wait(s1); printf("Остановлен семофор 1\n");           // первый семофор уже отработал, приостанавливаем
+        file_descr = open("file", O_RDWR); // открываем файл
+        if(file_descr < 0)
+        {
+            printf("Не удалось открыть файл.");
+            exit(0);
+        }
+
+        // Из файла извлекаем текущее число
+        read_status = read(file_descr, &current, sizeof(int));
+        if(read_status < 0)
+        {
+            printf("Не удалось прочитать файл.");
+            exit(0);
+        }
+        close(file_descr);
+        printf("Программа 1 приняла число: %d\n", current);
+        
+        // По определению чисел Фибоначчи высчитываем следующее(prev на 1 проход равен 1)
+        result = current + prev;
+        prev = result; // и когда вычислили след.число сразу запоминаем его как предыдущее для след.итерации
+
+        // Открываем файл и записываем в него текущий элемент
+        file_descr = open("file", O_RDWR);
+        if(file_descr < 0)
+        {
+            printf("Не удалось открыть файл.");
+            exit(0);
+        }
+
+        // тут запись
+        write_status = write(file_descr, &result, sizeof(int));
+        if(write_status < 0)
+        {
+            printf("Не удалось записать файл.");
+        }
+
+
+        printf("Программа 1 отправила число: %d\n", result);
+        close(file_descr);
+        sleep(1);
+        // запускаем второй семофор
+        sem_post(s2); printf("Запущен семофор 2\n");
+    }
+    
+    
+    sem_unlink(sem1);
+    sem_unlink(sem2);
+    return 0;
+}
+
